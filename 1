@@ -1,77 +1,95 @@
 import numpy as np
-from scipy.sparse import diags
-from scipy.sparse.linalg import cg
-from numpy.linalg import norm
 
-# 系統矩陣 A 和常數向量 b
+# 系統定義
 A = np.array([
-    [4, -1, 0, -1, 0, 0],
-    [-1, 4, -1, 0, -1, 0],
-    [0, -1, 4, 0, 1, -1],
-    [-1, 0, 0, 4, -1, -1],
-    [0, -1, 0, -1, 4, -1],
-    [0, 0, -1, 0, -1, 4]
+    [4, -1,  0, -1,  0,  0],
+    [-1, 4, -1,  0, -1,  0],
+    [0, -1,  4,  0,  1, -1],
+    [-1, 0,  0,  4, -1, -1],
+    [0, -1,  0, -1,  4, -1],
+    [0, 0, -1,  0, -1,  4]
 ], dtype=float)
 
 b = np.array([0, -1, 9, 4, 8, 6], dtype=float)
 
-# 初始解
-x0 = np.zeros_like(b)
+# 初始值與參數
+x0 = np.zeros(len(b))
+tol = 1e-6
+max_iter = 1000
 
 # Jacobi 方法
-def jacobi(A, b, x0, tol=1e-10, max_iterations=1000):
-    D = np.diag(A)
-    R = A - np.diagflat(D)
+def jacobi(A, b, x0, tol, max_iter):
+    D = np.diagflat(np.diag(A))
+    L_plus_U = A - D
+    D_inv = np.linalg.inv(D)
     x = x0.copy()
-    for i in range(max_iterations):
-        x_new = (b - np.dot(R, x)) / D
-        if norm(x_new - x, ord=np.inf) < tol:
-            return x_new
-        x = x_new
-    return x
+
+    for iteration in range(max_iter):
+        x_next = np.dot(D_inv, b - np.dot(L_plus_U, x))
+        if np.linalg.norm(x_next - x, ord=np.inf) < tol:
+            return x_next, iteration + 1
+        x = x_next
+    return x, max_iter
 
 # Gauss-Seidel 方法
-def gauss_seidel(A, b, x0, tol=1e-10, max_iterations=1000):
-    x = x0.copy()
+def gauss_seidel(A, b, x0, tol, max_iter):
     n = len(b)
-    for it in range(max_iterations):
+    x = x0.copy()
+
+    for iteration in range(max_iter):
         x_new = x.copy()
         for i in range(n):
-            s1 = np.dot(A[i, :i], x_new[:i])
-            s2 = np.dot(A[i, i+1:], x[i+1:])
-            x_new[i] = (b[i] - s1 - s2) / A[i, i]
-        if norm(x_new - x, ord=np.inf) < tol:
-            return x_new
+            sum_before = np.dot(A[i, :i], x_new[:i])
+            sum_after = np.dot(A[i, i+1:], x[i+1:])
+            x_new[i] = (b[i] - sum_before - sum_after) / A[i, i]
+        if np.linalg.norm(x_new - x, ord=np.inf) < tol:
+            return x_new, iteration + 1
         x = x_new
-    return x
+    return x, max_iter
 
 # SOR 方法
-def sor(A, b, x0, omega=1.25, tol=1e-10, max_iterations=1000):
-    x = x0.copy()
+def sor(A, b, x0, omega, tol, max_iter):
     n = len(b)
-    for it in range(max_iterations):
+    x = x0.copy()
+
+    for iteration in range(max_iter):
         x_new = x.copy()
         for i in range(n):
-            sigma = np.dot(A[i, :i], x_new[:i]) + np.dot(A[i, i+1:], x[i+1:])
-            x_new[i] = x[i] + omega * ((b[i] - sigma) / A[i, i] - x[i])
-        if norm(x_new - x, ord=np.inf) < tol:
-            return x_new
+            sum1 = np.dot(A[i, :i], x_new[:i])
+            sum2 = np.dot(A[i, i+1:], x[i+1:])
+            x_new[i] = (1 - omega) * x[i] + omega * (b[i] - sum1 - sum2) / A[i, i]
+        if np.linalg.norm(x_new - x, ord=np.inf) < tol:
+            return x_new, iteration + 1
         x = x_new
-    return x
+    return x, max_iter
 
-# Conjugate Gradient 方法（內建）
-def conjugate_gradient(A, b, x0):
-    x, info = cg(A, b, x0=x0, tol=1e-10)
-    return x
+# Conjugate Gradient 方法
+def conjugate_gradient(A, b, x0, tol, max_iter):
+    x = x0.copy()
+    r = b - np.dot(A, x)
+    p = r.copy()
+    rs_old = np.dot(r, r)
 
-# 執行各方法
-x_jacobi = jacobi(A, b, x0)
-x_gs = gauss_seidel(A, b, x0)
-x_sor = sor(A, b, x0)
-x_cg = conjugate_gradient(A, b, x0)
+    for iteration in range(max_iter):
+        Ap = np.dot(A, p)
+        alpha = rs_old / np.dot(p, Ap)
+        x += alpha * p
+        r -= alpha * Ap
+        rs_new = np.dot(r, r)
+        if np.sqrt(rs_new) < tol:
+            return x, iteration + 1
+        beta = rs_new / rs_old
+        p = r + beta * p
+        rs_old = rs_new
+    return x, max_iter
 
-# 輸出結果
-print("Jacobi 解:\n", x_jacobi)
-print("Gauss-Seidel 解:\n", x_gs)
-print("SOR 解:\n", x_sor)
-print("Conjugate Gradient 解:\n", x_cg)
+# 執行與輸出結果
+jacobi_sol, jacobi_iter = jacobi(A, b, x0, tol, max_iter)
+gs_sol, gs_iter = gauss_seidel(A, b, x0, tol, max_iter)
+sor_sol, sor_iter = sor(A, b, x0, omega=1.25, tol=tol, max_iter=max_iter)
+cg_sol, cg_iter = conjugate_gradient(A, b, x0, tol, max_iter)
+
+print("Jacobi 解:", jacobi_sol, "迭代次數:", jacobi_iter)
+print("Gauss-Seidel 解:", gs_sol, "迭代次數:", gs_iter)
+print("SOR 解 (ω=1.25):", sor_sol, "迭代次數:", sor_iter)
+print("Conjugate Gradient 解:", cg_sol, "迭代次數:", cg_iter)
