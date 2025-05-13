@@ -1,0 +1,77 @@
+import numpy as np
+from scipy.sparse import diags
+from scipy.sparse.linalg import cg
+from numpy.linalg import norm
+
+# 系統矩陣 A 和常數向量 b
+A = np.array([
+    [4, -1, 0, -1, 0, 0],
+    [-1, 4, -1, 0, -1, 0],
+    [0, -1, 4, 0, 1, -1],
+    [-1, 0, 0, 4, -1, -1],
+    [0, -1, 0, -1, 4, -1],
+    [0, 0, -1, 0, -1, 4]
+], dtype=float)
+
+b = np.array([0, -1, 9, 4, 8, 6], dtype=float)
+
+# 初始解
+x0 = np.zeros_like(b)
+
+# Jacobi 方法
+def jacobi(A, b, x0, tol=1e-10, max_iterations=1000):
+    D = np.diag(A)
+    R = A - np.diagflat(D)
+    x = x0.copy()
+    for i in range(max_iterations):
+        x_new = (b - np.dot(R, x)) / D
+        if norm(x_new - x, ord=np.inf) < tol:
+            return x_new
+        x = x_new
+    return x
+
+# Gauss-Seidel 方法
+def gauss_seidel(A, b, x0, tol=1e-10, max_iterations=1000):
+    x = x0.copy()
+    n = len(b)
+    for it in range(max_iterations):
+        x_new = x.copy()
+        for i in range(n):
+            s1 = np.dot(A[i, :i], x_new[:i])
+            s2 = np.dot(A[i, i+1:], x[i+1:])
+            x_new[i] = (b[i] - s1 - s2) / A[i, i]
+        if norm(x_new - x, ord=np.inf) < tol:
+            return x_new
+        x = x_new
+    return x
+
+# SOR 方法
+def sor(A, b, x0, omega=1.25, tol=1e-10, max_iterations=1000):
+    x = x0.copy()
+    n = len(b)
+    for it in range(max_iterations):
+        x_new = x.copy()
+        for i in range(n):
+            sigma = np.dot(A[i, :i], x_new[:i]) + np.dot(A[i, i+1:], x[i+1:])
+            x_new[i] = x[i] + omega * ((b[i] - sigma) / A[i, i] - x[i])
+        if norm(x_new - x, ord=np.inf) < tol:
+            return x_new
+        x = x_new
+    return x
+
+# Conjugate Gradient 方法（內建）
+def conjugate_gradient(A, b, x0):
+    x, info = cg(A, b, x0=x0, tol=1e-10)
+    return x
+
+# 執行各方法
+x_jacobi = jacobi(A, b, x0)
+x_gs = gauss_seidel(A, b, x0)
+x_sor = sor(A, b, x0)
+x_cg = conjugate_gradient(A, b, x0)
+
+# 輸出結果
+print("Jacobi 解:\n", x_jacobi)
+print("Gauss-Seidel 解:\n", x_gs)
+print("SOR 解:\n", x_sor)
+print("Conjugate Gradient 解:\n", x_cg)
